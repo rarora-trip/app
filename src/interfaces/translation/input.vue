@@ -106,7 +106,6 @@ export default {
 			const existingChanges = find(this.relationalChanges, {
 				[this.options.languageField]: this.currentLanguage
 			});
-
 			if (existingChanges) {
 				this.relationalChanges = this.relationalChanges.map(update => {
 					if (update[this.options.languageField] === this.currentLanguage) {
@@ -120,15 +119,43 @@ export default {
 					[field]: value,
 					[this.options.languageField]: this.currentLanguage
 				};
-
 				if (this.existing) {
 					const primaryKeyField = find(this.translatedFields, { primary_key: true })
 						.field;
 					const relatedPrimaryKey = this.existing[primaryKeyField];
 					update[primaryKeyField] = relatedPrimaryKey;
 				}
-
 				this.relationalChanges = [...this.relationalChanges, update];
+			}
+		},
+
+		// VIATOR- updateTempStore is method used to get initialValues from store.
+		// As directus uses backend db to return values and we need values that were staged in state of vue.
+		updateTempStore(value) {
+			var manyField = this.fields.id.collection;
+			if(manyField === 'articles_sections' || manyField === 'shelf_collections_sections') {
+				manyField = 'sections';
+			}
+			const storedSections=this.$store.state.edits.values[manyField];
+			if(storedSections && Array.isArray(value)) {
+				storedSections.map(section => {
+					if(section.content_translations) {
+						section.content_translations.map(storedTranslation => {
+							if(storedTranslation.id ) {
+								const inputData = value.find(x => x.id === storedTranslation.id);
+									if(inputData) {
+										const translation = merge(inputData,storedTranslation);
+									}
+
+							} else {
+								if(section.internal_temp_id === this.currentPrimaryKey )
+								{
+									value.push(storedTranslation);
+								}
+							}
+						});
+					}
+					});
 			}
 		},
 		async fetchInitial() {
@@ -136,7 +163,7 @@ export default {
 				return;
 			}
 
-			if (this.newItem) {
+			if (false) {
 				this.initialValues = [];
 				return;
 			}
@@ -144,15 +171,15 @@ export default {
 			this.loading = true;
 			const { collection } = this.relation.collection_many;
 			const { field } = this.relation.field_many;
-
-			const { data } = await this.$api.getItems(collection, {
+			var { data } = await this.$api.getItems(collection, {
 				filter: {
 					[field]: {
 						eq: this.currentPrimaryKey
 					}
 				}
 			});
-
+			//VIATOR- before returning initial values to form, we fetch values from store and merge it with values received from backend.
+			this.updateTempStore(data);
 			this.initialValues = data;
 			this.loading = false;
 		}

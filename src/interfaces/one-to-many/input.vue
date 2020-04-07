@@ -384,7 +384,37 @@ export default {
 			this.startEdit(tempKey);
 		},
 
+		// VIATOR-updateTempStore is a method that updates the store of vue with the values we entered in form for one-to-many relationship.
+		// This method is called while staging intermittent values.
+		updateTempStore(value) {
+        const storedSections=this.$store.state.edits.values[this.relation.field_one.field];
+			if(storedSections && Array.isArray(value)) {
+				storedSections.map(section => {
+					if(section.content_translations) {
+						section.content_translations.map(storedTranslation => {
+							if(storedTranslation.id ) {
+								const inputData = value.find(x => x.id === storedTranslation.id);
+									if(inputData) {
+										const translation = merge(inputData,storedTranslation);
+									}
+							} else {
+								const primaryKey = this.editItem[this.relatedPrimaryKeyField];
+								const actualTranslation = value.find(x => x.language_code === storedTranslation.language_code);
+								if(section.internal_temp_id === primaryKey && actualTranslation)
+								{
+									merge(actualTranslation,storedTranslation);
+								}
+							}
+						});
+					}
+					});
+			}
+		},
+
 		stageValue({ field, value }) {
+		    // VIATOR- when we stage value, directus loses previous state.
+		    // By calling this method we are trying to store previous state in store.
+			this.updateTempStore(value);
 			this.$set(this.editItem, field, value);
 		},
 
@@ -394,7 +424,6 @@ export default {
 			);
 
 			const isNewItem = typeof primaryKey === 'string' && primaryKey.startsWith('$temp_');
-
 			if (isNewItem === false) {
 				const collection = this.relation.collection_many.collection;
 				const res = await this.$api.getItem(collection, primaryKey, { fields: '*.*.*' });
@@ -414,7 +443,6 @@ export default {
 			this.items = this.items.map(item => {
 				if (item[this.relatedPrimaryKeyField] === primaryKey) {
 					const edits = clone(this.editItem);
-
 					// Make sure we remove the many to one field that points to this o2m to prevent this nested item
 					// to be accidentally assigned to another parent
 					if (edits.hasOwnProperty(manyToManyField)) {
@@ -423,10 +451,8 @@ export default {
 
 					return edits;
 				}
-
 				return item;
 			});
-
 			this.editItem = null;
 		},
 
@@ -492,7 +518,6 @@ export default {
 
 		emitValue(value) {
 			value = cloneDeep(value);
-
 			const recursiveKey = this.relation.field_many.field;
 
 			const newValue = value
@@ -541,7 +566,6 @@ export default {
 							) {
 								delete newVal[recursiveKey];
 							}
-
 							return merge({}, newVal, delta);
 						} else {
 							return null;
@@ -551,14 +575,14 @@ export default {
 					if (recursiveKey && after.hasOwnProperty(recursiveKey)) {
 						delete after[recursiveKey];
 					}
-
+					// VIATOR- to manage state, we use updatedId field to store temporary id given to new entities.
+					after.internal_temp_id=after[this.relatedPrimaryKeyField];
 					if (
 						typeof after[this.relatedPrimaryKeyField] === 'string' &&
 						after[this.relatedPrimaryKeyField].startsWith('$temp_')
 					) {
 						delete after[this.relatedPrimaryKeyField];
 					}
-
 					return after;
 				})
 				.filter(i => i);
